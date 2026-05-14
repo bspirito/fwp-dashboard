@@ -410,6 +410,27 @@ with tab_trend:
         for loc in plot_df['Location'].unique():
             loc_df = plot_df[plot_df['Location'] == loc]
             fig.add_trace(go.Scatter(x=loc_df['Date'], y=loc_df['Result_Clean'], mode='lines+markers', name=f"{loc}"), secondary_y=False)
+        
+        # --- NEW: Weather Context Logic ---
+        if (show_temp or show_rain or show_rain_ma) and not weather_df.empty:
+            w_start, w_end = plot_df['Date'].min(), plot_df['Date'].max()
+            w_plot_df = weather_df[(weather_df['Date'] >= w_start) & (weather_df['Date'] <= w_end)].copy()
+            
+            if not w_plot_df.empty:
+                if show_temp:
+                    t_col = 'tavg_f' if temp_unit == "Fahrenheit" else 'Temp_C'
+                    fig.add_trace(go.Scatter(x=w_plot_df['Date'], y=w_plot_df[t_col], name=f"Temp ({temp_unit[0]})", 
+                                             line=dict(color='orange', width=1, dash='dot'), opacity=0.5), secondary_y=True)
+                
+                if show_rain:
+                    fig.add_trace(go.Bar(x=w_plot_df['Date'], y=w_plot_df['prcp_in'], name="Rain (in)", 
+                                         marker_color='lightblue', opacity=0.4), secondary_y=True)
+                
+                if show_rain_ma:
+                    w_plot_df['rain_ma'] = w_plot_df['prcp_in'].rolling(window=7).mean()
+                    fig.add_trace(go.Scatter(x=w_plot_df['Date'], y=w_plot_df['rain_ma'], name="Rain 7d Avg", 
+                                             line=dict(color='blue', width=2), opacity=0.6), secondary_y=True)
+
         # --- Universal Threshold Highlighting ---
         ref_active = st.session_state.ref_df[st.session_state.ref_df['Parameter'] == active_param]
         
@@ -420,21 +441,21 @@ with tab_trend:
             # Special Case: Oxygen and Secchi (Higher is BETTER)
             if 'Oxygen' in active_param or 'Secchi' in active_param:
                 # Green above limit, Red below
-                fig.add_hrect(y0=limit, y1=y_max, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Healthy Zone", annotation_position="top left")
-                fig.add_hrect(y0=0, y1=limit, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Impaired Zone", annotation_position="bottom left")
+                fig.add_hrect(y0=limit, y1=y_max, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Healthy Zone", annotation_position="top left", layer="below")
+                fig.add_hrect(y0=0, y1=limit, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Impaired Zone", annotation_position="bottom left", layer="below")
                 fig.add_hline(y=limit, line_dash="dash", line_color="black", annotation_text=f"Standard: {limit}")
             
             # Special Case: pH (Safe Range)
             elif active_param == 'pH':
-                fig.add_hrect(y0=6.5, y1=8.5, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Optimal pH")
-                fig.add_hrect(y0=0, y1=6.5, fillcolor="red", opacity=0.1, line_width=0)
-                fig.add_hrect(y0=8.5, y1=14, fillcolor="red", opacity=0.1, line_width=0)
+                fig.add_hrect(y0=6.5, y1=8.5, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Optimal pH", layer="below")
+                fig.add_hrect(y0=0, y1=6.5, fillcolor="red", opacity=0.1, line_width=0, layer="below")
+                fig.add_hrect(y0=8.5, y1=14, fillcolor="red", opacity=0.1, line_width=0, layer="below")
             
             # Standard Case: Nutrients/Bacteria (Lower is BETTER)
             else:
                 # Green below limit, Red above
-                fig.add_hrect(y0=0, y1=limit, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Safe Zone", annotation_position="bottom left")
-                fig.add_hrect(y0=limit, y1=y_max, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Exceedance Zone", annotation_position="top left")
+                fig.add_hrect(y0=0, y1=limit, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Safe Zone", annotation_position="bottom left", layer="below")
+                fig.add_hrect(y0=limit, y1=y_max, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Exceedance Zone", annotation_position="top left", layer="below")
                 fig.add_hline(y=limit, line_dash="dash", line_color="red", annotation_text=f"Limit: {limit}")
 
         # Determine Secondary Y-Axis Title
