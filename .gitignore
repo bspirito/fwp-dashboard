@@ -1,0 +1,13 @@
+# Ignore everything
+*
+
+# Allow essential files
+!app.py
+!requirements.txt
+!winchester_weather_history.csv
+!README.md
+!.gitignore
+
+# Ignore system files
+.DS_Store
+Thumbs.db
