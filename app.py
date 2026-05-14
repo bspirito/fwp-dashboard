@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import folium
+from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 import pydeck as pdk
 import plotly.express as px
@@ -155,8 +156,8 @@ with col_r:
     st.caption(f"Sync: {last_updated}")
 
 # --- TABS ---
-tab_report, tab_map, tab_trend, tab_corr, tab_algae, tab_ref = st.tabs([
-    "🏆 Health Report Card", "🗺️ Interactive Maps", "📈 Results Trend", "🔗 Correlation", "🌿 Algae community", "📋 References"
+tab_report, tab_map, tab_trend, tab_corr, tab_algae, tab_analytics, tab_ref = st.tabs([
+    "🏆 Health Report Card", "🗺️ Interactive Maps", "📈 Results Trend", "🔗 Correlation", "🌿 Algae community", "🔬 Advanced Analytics", "📋 References"
 ])
 
 # --- TAB: REPORT CARD ---
@@ -512,6 +513,84 @@ with tab_algae:
         toxic_df = algae_all[algae_all['Parameter'].isin(TOXIC_SPECIES)]
         if not toxic_df.empty:
             st.plotly_chart(px.bar(toxic_df, x='Date', y='Result_Clean', color='Parameter', title="Toxic Watch"), use_container_width=True)
+
+# --- TAB: ANALYTICS ---
+with tab_analytics:
+    st.header("🔬 Advanced Scientific Insights")
+    
+    a_tab1, a_tab2, a_tab3, a_tab4 = st.tabs([
+        "📍 Spatial Hotspots", "🗓️ Seasonal Fingerprint", "🧪 Nutrient Dynamics", "📊 Variability Analysis"
+    ])
+    
+    with a_tab1:
+        st.subheader("Intensity Heatmap")
+        if not active_filtered_df.empty:
+            center = [active_filtered_df['lat'].mean(), active_filtered_df['lon'].mean()]
+            m_heat = folium.Map(location=center, zoom_start=17)
+            heat_data = active_filtered_df[['lat', 'lon', 'Result_Clean']].values.tolist()
+            HeatMap(heat_data, radius=25, blur=15).add_to(m_heat)
+            st_folium(m_heat, height=600, use_container_width=True, key="analytics-heatmap")
+            st.caption(f"Showing intensity for {active_param} on {display_date}")
+            
+    with a_tab2:
+        st.subheader("Seasonal Stress Profile (Radar)")
+        radar_params = st.multiselect("Select Parameters for Radar", all_params, 
+                                     default=[p for p in ["Total Phosphorus", "E. Coli", "Total Nitrogen"] if p in all_params])
+        
+        if radar_params:
+            radar_df = df[df['Parameter'].isin(radar_params)].copy()
+            # Normalize to 0-100 scale for comparison
+            radar_plot_data = []
+            for p in radar_params:
+                p_df = radar_df[radar_df['Parameter'] == p]
+                p_max = p_df['Result_Clean'].max() or 1
+                p_monthly = p_df.groupby('Month')['Result_Clean'].mean().reset_index()
+                p_monthly['Value_Norm'] = (p_monthly['Result_Clean'] / p_max) * 100
+                p_monthly['Param'] = p
+                radar_plot_data.append(p_monthly)
+            
+            if radar_plot_data:
+                full_radar_df = pd.concat(radar_plot_data)
+                month_names = {1:'Jan', 2:'Feb', 3:'Mar', 4:'Apr', 5:'May', 6:'Jun', 7:'Jul', 8:'Aug', 9:'Sep', 10:'Oct', 11:'Nov', 12:'Dec'}
+                full_radar_df['Month_Name'] = full_radar_df['Month'].map(month_names)
+                
+                fig_radar = go.Figure()
+                for p in radar_params:
+                    p_data = full_radar_df[full_radar_df['Param'] == p].sort_values('Month')
+                    fig_radar.add_trace(go.Scatterpolar(r=p_data['Value_Norm'], theta=p_data['Month_Name'], fill='toself', name=p))
+                
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=True, height=600)
+                st.plotly_chart(fig_radar, use_container_width=True)
+                st.info("Values are normalized (0-100%) relative to the maximum recorded value for each parameter.")
+
+    with a_tab3:
+        st.subheader("Nutrient-Algae Efficiency")
+        # Find overlapping dates for Phosphorus and Chlorophyll
+        p_name = next((p for p in all_params if "Phosphorus" in p), None)
+        c_name = next((p for p in all_params if "Chlorophyll" in p), None)
+        
+        if p_name and c_name:
+            eff_df = df[df['Parameter'].isin([p_name, c_name])].pivot_table(index=['Date', 'Location'], columns='Parameter', values='Result_Clean').dropna()
+            if not eff_df.empty:
+                fig_eff = px.scatter(eff_df, x=p_name, y=c_name, trendline="ols", hover_data=[eff_df.index.get_level_values(0)],
+                                    title=f"Response: {c_name} vs {p_name}")
+                st.plotly_chart(fig_eff, use_container_width=True)
+                r_val = eff_df[p_name].corr(eff_df[c_name])
+                st.metric("Biological Response Correlation (R)", f"{r_val:.2f}")
+            else: st.warning("No overlapping sampling dates found for Phosphorus and Chlorophyll.")
+        else: st.warning("Phosphorus or Chlorophyll data not found in dataset.")
+
+    with a_tab4:
+        st.subheader("Location Consistency & Extremes")
+        fig_box = px.box(active_param_df, x="Location", y="Result_Clean", color="Location", points="all",
+                        title=f"{active_param} Distribution by Site")
+        st.plotly_chart(fig_box, use_container_width=True)
+        st.markdown("""
+        **How to read this:**
+        *   **Box height:** Represents the typical range (middle 50%).
+        *   **Points:** Every single sample. Points far above the box are **dangerous spikes**.
+        *   **Horizontal line:** The median (middle) value.
+        """)
 
 # --- TAB: REF ---
 with tab_ref:
