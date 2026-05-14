@@ -439,8 +439,8 @@ with tab_trend:
             limit = ref_active['Max'].iloc[0]
             y_max = max(limit * 1.5, plot_df['Result_Clean'].max() * 1.2, 1.0)
             
-            # Special Case: Oxygen and Secchi (Higher is BETTER)
-            if 'Oxygen' in active_param or 'Secchi' in active_param:
+            # Special Case: Oxygen, Secchi, and Depth (Higher is BETTER / Normal)
+            if any(term in active_param for term in ['Oxygen', 'Secchi', 'Water Depth']):
                 # Green above limit, Red below
                 fig.add_hrect(y0=limit, y1=y_max, fillcolor="green", opacity=0.1, line_width=0, annotation_text="Healthy Zone", annotation_position="top left", layer="below")
                 fig.add_hrect(y0=0, y1=limit, fillcolor="red", opacity=0.1, line_width=0, annotation_text="Impaired Zone", annotation_position="bottom left", layer="below")
